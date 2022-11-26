@@ -31,6 +31,7 @@ static mpc_ast_t *_parse_dbc_file_by_handle(const char *name, FILE *handle);
 	X(signal,               "signal")\
 	X(message,              "message")\
 	X(messages,             "messages")\
+	X(message_sender,       "message_sender")\
 	X(types,                "types")\
 	X(version,              "version")\
 	X(ecus,                 "ecus")\
@@ -44,6 +45,7 @@ static mpc_ast_t *_parse_dbc_file_by_handle(const char *name, FILE *handle);
 	X(val,                  "val")\
 	X(vals,                 "vals")\
 	X(attribute_definition, "attribute_definition")\
+	X(attribute_def_def,    "attribute_def_def")\
 	X(attribute_value,      "attribute_value")\
 	X(comment,              "comment")\
 	X(comments,             "comments")\
@@ -78,6 +80,7 @@ static const char *dbc_grammar =
 "                        <range> <s>* <unit> <s>* <nodes> <s>* <n> ; \n"
 " message              : \"BO_\" <s>+ <id> <s>+ <name>  <s>* ':' <s>* <dlc> <s>+ <ecu> <s>* <n> <signal>* ; \n"
 " messages             : (<message> <n>*)* ; \n"
+" message_sender       : \"BO_TX_BU_\"  <s>+ <id> <s>+ ':' <s>* <nodes> ';' <n>* ;\n"
 " version              : \"VERSION\" <s> <string> <n>+ ; \n"
 " ecus                 : \"BU_\" <s>* ':' (<ident>|<s>)* <n> ; \n"
 " symbols              : \"NS_\" <s>* ':' <s>* <n> ('\t'|' '* <ident> <n>)* <n> ; \n"
@@ -90,7 +93,8 @@ static const char *dbc_grammar =
 " val_cnt              : <integer> ; \n"
 " val_name             : <string> ; \n"
 " val_index            : <integer> ; \n"
-" attribute_definition : \"BA_DEF_\" (<whatever>|<s>|',')* ';' <n> ; \n"
+" attribute_definition : \"BA_DEF_\" <s>+ (<whatever>|<s>|',')* ';' <n> ; \n"
+" attribute_def_def    : \"BA_DEF_DEF_\" (<whatever>|<s>)* ';' <n> ; \n"
 " attribute_value      : \"BA_\" (<whatever>|<s>|',')* ';' <n> ; \n"
 " val_item             : (<integer> <s>+ <string> <s>+) ; \n"
 " val                  : \"VAL_\" <s>+ <id> <s>+ <name> <s>+ <val_item>* ';' <n> ; \n"
@@ -106,7 +110,7 @@ static const char *dbc_grammar =
 "                        |    <comment_string> "
 "                        ) <s>* ';' <n> ;\n "
 " comments              : <comment>* ; "
-" dbc       : <version> <symbols> <bs> <ecus> <values>* <n>* <messages> <comments> <sigval>* <attribute_definition>* <attribute_value>* <vals>  ; \n" ;
+" dbc       : <version> <symbols> <bs> <ecus> <values>* <n>* <messages> <message_sender>* <sigval>* <comments>  <attribute_definition>* <attribute_def_def>* <attribute_value>* <vals>; \n" ;
 
 const char *parse_get_grammar(void)
 {

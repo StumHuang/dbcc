@@ -87,6 +87,35 @@ static void units(mpc_ast_t *ast, signal_t *sig)
 	sig->units = duplicate(unit->contents);
 }
 
+static void ecus(mpc_ast_t *ast, signal_t *sig)
+{
+	assert(ast && sig);
+
+	mpc_ast_t *node = mpc_ast_get_child(ast, "nodes|>");
+	
+	if (node != NULL)
+	{
+		char **nodes = allocate(sizeof(*nodes) * (node->children_num+1));
+		for(int i = 0; i >= 0;) 
+		{
+			i = mpc_ast_get_index_lb(node, "node|ident|regex", i);
+			if (i >=0)
+			{
+				nodes[sig->ecu_count++] = duplicate(node->children[i]->contents);
+				i++;
+			}
+		}
+		sig->ecus = nodes;
+	}
+	else
+	{
+		char **nodes = allocate(sizeof(*nodes));
+		mpc_ast_t *node  = mpc_ast_get_child(ast, "nodes|node|ident|regex");
+		nodes[sig->ecu_count++] = duplicate(node->contents);
+		sig->ecus = nodes;
+	}	
+}
+
 static int sigval(mpc_ast_t *top, unsigned id, const char *signal)
 {
 	assert(top);
@@ -143,6 +172,7 @@ static signal_t *ast2signal(mpc_ast_t *top, mpc_ast_t *ast, unsigned can_id)
 	y_mx_c(mpc_ast_get_child(ast, "y_mx_c|>"), sig);
 	range(mpc_ast_get_child(ast, "range|>"), sig);
 	units(mpc_ast_get_child(ast, "unit|string|>"), sig);
+	ecus(ast, sig);
 	/*nodes(mpc_ast_get_child(ast, "nodes|node|ident|regex|>"), sig);*/
 
 	/* process multiplexed values, if present */
@@ -161,10 +191,10 @@ static signal_t *ast2signal(mpc_ast_t *top, mpc_ast_t *ast, unsigned can_id)
 	if (sig->sigval == 1 || sig->sigval == 2)
 		sig->is_floating = true;
 
-	debug("\tname => %s; start %u length %u %s %s %s",
+	debug("\tname => %s; start %u length %u %s %s %s %s",
 			sig->name, sig->start_bit, sig->bit_length, sig->units,
 			sig->endianess ? "intel" : "motorola",
-			sig->is_signed ? "signed " : "unsigned");
+			sig->is_signed ? "signed " : "unsigned",sig->ecus[0]);
 	return sig;
 }
 
