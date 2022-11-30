@@ -21,6 +21,86 @@ typedef enum {
 	numeric_floating_e,
 } numeric_e;
 
+typedef enum {
+	ET_ = 0,
+	BU_ = 1,
+	BO_ = 2,
+	SG_ = 3,
+	EV_ = 4,
+} object_type;
+
+typedef enum {
+	INT_ = 0,
+	HEX_ = 1,
+	FLOAT_ = 2,
+	STRING_ = 3,
+	ENUM_ = 4,
+} attribute_type;
+
+typedef struct{
+	char *name;
+	object_type obj_type;
+	attribute_type att_type;
+
+	union
+	{
+		struct 
+		{
+			int min;
+			int max;		
+		}INT_;
+		struct
+		{
+			int min;
+			int max;
+		}HEX_;
+		struct 
+		{
+			float min;
+			float max;
+		}FLOAT_;
+		
+		char STRING;
+		struct
+		{
+			int count;
+			char **ENUM_list;
+		}ENUM_;
+	}value;
+}attribute_definition;
+
+typedef struct {
+	char *name;
+	object_type obj_type;
+	union
+	{
+		char *node_name;
+		unsigned int message;
+		struct 
+		{
+			unsigned int   id;
+			char           *signal_name;
+		}signal;
+		char *env_name;
+	}obj_name;
+
+	union
+	{
+		unsigned int unsigned_integer;
+		int          signed_integer;
+		float 		 FLOAT;
+		char         *char_string;
+	}value;
+	attribute_definition * definition;
+} attribute_value;
+
+typedef struct
+{
+	int attribute_value_count;
+	attribute_value ** attribute;
+
+}attribute_values;
+
 typedef struct {
 	char *name;
 	unsigned value;
@@ -50,8 +130,8 @@ typedef struct {
 	unsigned sigval;     /**< 1 == float, 2 == double. is_floating implies sigval == 1 || sigval == 2 */
 	bool is_multiplexor; /**< true if this is a multiplexor */
 	bool is_multiplexed; /**< true if this is a multiplexed signal */
-	unsigned switchval;  /**< if is_multiplexed, this will contain the
-			       value that decodes this signal for the multiplexor */
+	unsigned switchval;  /**< if is_multiplexed, this will contain the value that decodes this signal for the multiplexor */
+	attribute_values * attribute;
 	val_list_t *val_list;
 	char *comment;
 } signal_t;
@@ -64,6 +144,7 @@ typedef struct {
 	size_t signal_count; /**< number of signals */
 	unsigned dlc;        /**< length of CAN message 0-8 bytes */
 	unsigned long id;    /**< identifier, 11 or 29 bit */
+	attribute_values * attribute;
 	char *comment;
 } can_msg_t;
 
@@ -73,6 +154,7 @@ typedef struct {
 	can_msg_t **messages; /**< list of messages */
 	size_t val_count;     /**< count of vals */
 	val_list_t **vals;    /**< value list; used for enumerations in DBC file */
+	attribute_values * attribute;
 } dbc_t;
 
 dbc_t *ast2dbc(mpc_ast_t *ast);

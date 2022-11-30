@@ -6,51 +6,57 @@ static mpc_ast_t *_parse_dbc_string(const char *file_name, const char *string);
 static mpc_ast_t *_parse_dbc_file_by_handle(const char *name, FILE *handle);
 
 #define X_MACRO_PARSE_VARS\
-	X(spaces,               "s")\
-	X(newline,              "n")\
-	X(sign,                 "sign")\
-	X(flt,                  "float")\
-	X(ident,                "ident")\
-	X(integer,              "integer")\
-	X(factor,               "factor")\
-	X(offset,               "offset")\
-	X(range,                "range")\
-	X(length,               "length")\
-	X(node,                 "node")\
-	X(nodes,                "nodes")\
-	X(stringp,              "string")\
-	X(unit,                 "unit")\
-	X(startbit,             "startbit")\
-	X(endianess,            "endianess")\
-	X(y_mx_c,               "y_mx_c")\
-	X(name,                 "name")\
-	X(ecu,                  "ecu")\
-	X(dlc,                  "dlc")\
-	X(id,                   "id")\
-	X(multiplexor,          "multiplexor")\
-	X(signal,               "signal")\
-	X(message,              "message")\
-	X(messages,             "messages")\
-	X(message_sender,       "message_sender")\
-	X(types,                "types")\
-	X(version,              "version")\
-	X(ecus,                 "ecus")\
-	X(symbols,              "symbols")\
-	X(bs,                   "bs")\
-	X(sigtype,              "sigtype")\
-	X(sigval,               "sigval")\
-	X(whatever,             "whatever")\
-	X(values,               "values")\
-	X(val_item,             "val_item")\
-	X(val,                  "val")\
-	X(vals,                 "vals")\
-	X(attribute_definition, "attribute_definition")\
-	X(attribute_def_def,    "attribute_def_def")\
-	X(attribute_value,      "attribute_value")\
-	X(comment,              "comment")\
-	X(comments,             "comments")\
-	X(comment_string,       "comment_string")\
-	X(dbc,                  "dbc")
+	X(spaces,               			"s")\
+	X(newline,              			"n")\
+	X(sign,                 			"sign")\
+	X(flt,                  			"float")\
+	X(ident,                			"ident")\
+	X(integer,              			"integer")\
+	X(factor,               			"factor")\
+	X(offset,               			"offset")\
+	X(range,                			"range")\
+	X(length,               			"length")\
+	X(node,                 			"node")\
+	X(nodes,                			"nodes")\
+	X(stringp,              			"string")\
+	X(unit,                 			"unit")\
+	X(startbit,             			"startbit")\
+	X(endianess,            			"endianess")\
+	X(y_mx_c,               			"y_mx_c")\
+	X(name,                 			"name")\
+	X(ecu,                  			"ecu")\
+	X(dlc,                  			"dlc")\
+	X(id,                   			"id")\
+	X(multiplexor,          			"multiplexor")\
+	X(signal,               			"signal")\
+	X(message,              			"message")\
+	X(messages,             			"messages")\
+	X(message_sender,       			"message_sender")\
+	X(types,                			"types")\
+	X(version,              			"version")\
+	X(ecus,                 			"ecus")\
+	X(symbols,              			"symbols")\
+	X(bs,                   			"bs")\
+	X(sigtype,              			"sigtype")\
+	X(sigval,               			"sigval")\
+	X(whatever,             			"whatever")\
+	X(values,               			"values")\
+	X(val_item,             			"val_item")\
+	X(val,                  			"val")\
+	X(vals,                 			"vals")\
+	X(attribute_name,       			"attribute_name")\
+	X(object_type,          			"object_type")\
+	X(attribute_value_type, 			"attribute_value_type")\
+	X(attribute_definition, 			"attribute_definition")\
+	X(attribute_definitions, 			"attribute_definitions")\
+	X(attribute_default,    			"attribute_default")\
+	X(attribute_value,      			"attribute_value")\
+	X(attribute_value_for_object,     	"attribute_value_for_object")\
+	X(attribute_values,     			"attribute_values")\
+	X(comment,              			"comment")\
+	X(comments,             			"comments")\
+	X(comment_string,       			"comment_string")\
+	X(dbc,                  			"dbc")
 
 static const char *dbc_grammar =
 " s                    : /[ \\t]/ ; \n"
@@ -93,9 +99,22 @@ static const char *dbc_grammar =
 " val_cnt              : <integer> ; \n"
 " val_name             : <string> ; \n"
 " val_index            : <integer> ; \n"
-" attribute_definition : \"BA_DEF_\" <s>+ (<whatever>|<s>|',')* ';' <n> ; \n"
-" attribute_def_def    : \"BA_DEF_DEF_\" (<whatever>|<s>)* ';' <n> ; \n"
-" attribute_value      : \"BA_\" (<whatever>|<s>|',')* ';' <n> ; \n"
+" attribute_name       : <string> ; \n"
+" object_type          : ( \"BU_\" | \"BO_\" | \"SG_\" | \"EV_\")? ; \n"
+" attribute_value_type : "
+"                        ("
+"                          	  \"INT\"    <s>+ <integer> <s>+ <integer> <s>* "
+"                        |    \"HEX\"    <s>+ <integer> <s>+ <integer> <s>* "
+"                        |    \"FLOAT\"  <s>+ <float> <s>+ <float> <s>*"
+"                        |    \"STRING\" <s>* "
+"						 |    \"ENUM\"   (<s>+|<string>|',')* "
+"                        ) ; \n"
+" attribute_definition : \"BA_DEF_\" <s>+ <object_type> <s>* <attribute_name> <s>+ <attribute_value_type> ';' <n> ; \n"
+" attribute_definitions: <attribute_definition>* ; \n"
+" attribute_value      : (<integer> | <float> | <string>); \n"
+" attribute_default    : \"BA_DEF_DEF_\" <s>+ <attribute_name> <s>+ <attribute_value>';' <n>; \n"
+" attribute_value_for_object     : \"BA_\" <s>+ <attribute_name> <s>+ (<object_type> <s>+ (<node>|<id> <s>+ <name>|<id>|<env_var_name>) <s>+ )? <attribute_value> <s>* ';' <n> ; \n"
+" attribute_values     : <attribute_value_for_object>* ; \n"
 " val_item             : (<integer> <s>+ <string> <s>+) ; \n"
 " val                  : \"VAL_\" <s>+ <id> <s>+ <name> <s>+ <val_item>* ';' <n> ; \n"
 " vals                 : <val>* ; \n"
@@ -110,7 +129,31 @@ static const char *dbc_grammar =
 "                        |    <comment_string> "
 "                        ) <s>* ';' <n> ;\n "
 " comments              : <comment>* ; "
-" dbc       : <version> <symbols> <bs> <ecus> <values>* <n>* <messages> <message_sender>* <sigval>* <comments>  <attribute_definition>* <attribute_def_def>* <attribute_value>* <vals>; \n" ;
+/*DBC_file =
+    version
+    new_symbols
+    bit_timing										(*obsolete but required*)
+    nodes
+    value_tables
+    messages
+    message_transmitters
+    environment_variables
+    environment_variables_data
+    signal_types
+	comments
+	attribute_definitions
+	sigtype_attr_list
+	attribute_defaults
+	attribute_values
+	value_descriptions
+	category_definitions							(*obsolete*)
+	categories										(*obsolete*)
+	filter											(*obsolete*)
+	signal_type_refs
+	signal_groups
+	signal_extended_value_type_list
+	extended_multiplexing ;*/
+" dbc       : <version> <symbols> <bs> <ecus> <values>* <n>* <messages> <message_sender>* <sigval>* <comments>  <attribute_definitions> <attribute_default>* <attribute_values> <vals>; \n" ;
 
 const char *parse_get_grammar(void)
 {

@@ -155,6 +155,7 @@ static signal_t *ast2signal(mpc_ast_t *top, mpc_ast_t *ast, unsigned can_id)
 	mpc_ast_t *sign   = mpc_ast_get_child(ast, "sign|char");
 	sig->name = duplicate(name->contents);
 	sig->val_list = NULL;
+	sig->attribute    = allocate(sizeof(attribute_values));
 	r = sscanf(start->contents, "%u", &sig->start_bit);
 	/* BUG: Minor bug, an error should be returned here instead */
 	assert(r == 1 && sig->start_bit <= 64);
@@ -309,6 +310,8 @@ static can_msg_t *ast2msg(mpc_ast_t *top, mpc_ast_t *ast, dbc_t *dbc)
 		} while (bFlip);
 	}
 
+	c->attribute = allocate(sizeof(attribute_values));
+
 	debug("%s id:%u dlc:%u signals:%zu ecu:%s", c->name, c->id, c->dlc, c->signal_count, c->ecu);
 	return c;
 }
@@ -351,6 +354,249 @@ void assign_comment_to_message(dbc_t *dbc, const char *comment, unsigned message
 		if (dbc->messages[i]->id == message_id) {
 			dbc->messages[i]->comment = duplicate(comment);
 			return;
+		}
+	}
+}
+
+
+attribute_values *ast2attribute(mpc_ast_t *ast)
+{
+	
+	 
+	mpc_ast_t *attribute_definitions = mpc_ast_get_child(ast, "attribute_definitions|>");
+
+	attribute_definition **definitions = allocate(sizeof(attribute_definition)*attribute_definitions->children_num);
+	for(int i = 0;i<attribute_definitions->children_num;i++)
+	{
+		definitions[i] = allocate(sizeof(attribute_definition));
+
+        /*get name of attribute_definition */
+		mpc_ast_t *attribute_name = mpc_ast_get_child(attribute_definitions->children[i], "attribute_name|string|>");
+		mpc_ast_t *name = mpc_ast_get_child(attribute_name,"regex");
+		definitions[i]->name = duplicate(name->contents);
+
+		/*get object_type of attribute_definition */
+		mpc_ast_t *obj_type = mpc_ast_get_child(attribute_definitions->children[i], "object_type|string");
+		if (obj_type==NULL)							    	{definitions[i]->obj_type = ET_;}
+		else if (strcmp(obj_type->contents,"BU_")==0) 		{definitions[i]->obj_type = BU_;}
+		else if (strcmp(obj_type->contents,"BO_")==0) 	    {definitions[i]->obj_type = BO_;}
+		else if (strcmp(obj_type->contents,"SG_")==0) 	    {definitions[i]->obj_type = SG_;}
+		else     	                                    	{definitions[i]->obj_type = EV_;}                                       
+
+		/*get attribute value type of attribute_definition */
+		mpc_ast_t *attribute_type = mpc_ast_get_child(attribute_definitions->children[i], "attribute_value_type|>");
+		mpc_ast_t *att_type = mpc_ast_get_child(attribute_type,"string");
+
+		if (strcmp(att_type->contents,"INT")==0)
+		{
+			definitions[i]->att_type = INT_;
+			int j = mpc_ast_get_index_lb(attribute_type, "integer|regex", 0);
+			mpc_ast_t *value = mpc_ast_get_child_lb(attribute_type,"integer|regex",j);
+			sscanf(value->contents,  "%d", &definitions[i]->value.INT_.min);
+
+			value = mpc_ast_get_child_lb(attribute_type,"integer|regex",++j);
+			sscanf(value->contents,  "%d", &definitions[i]->value.INT_.max);
+
+		}
+		else if (strcmp(att_type->contents,"HEX")==0)
+		{
+			definitions[i]->att_type = HEX_;
+			int j = mpc_ast_get_index_lb(attribute_type, "integer|regex", 0);
+			mpc_ast_t *value = mpc_ast_get_child_lb(attribute_type,"integer|regex",j);
+			sscanf(value->contents,  "%x", &definitions[i]->value.HEX_.min);
+
+			value = mpc_ast_get_child_lb(attribute_type,"integer|regex",++j);
+			sscanf(value->contents,  "%x", &definitions[i]->value.HEX_.max);
+		}
+		else if (strcmp(att_type->contents,"FLOAT")==0)
+		{
+			definitions[i]->att_type = FLOAT_;
+			int j = mpc_ast_get_index_lb(attribute_type, "float|regex", 0);
+			mpc_ast_t *value = mpc_ast_get_child_lb(attribute_type,"float|regex",j);
+			sscanf(value->contents,  "%f", &definitions[i]->value.FLOAT_.min);
+
+			value = mpc_ast_get_child_lb(attribute_type,"float|regex",++j);
+			sscanf(value->contents,  "%f", &definitions[i]->value.FLOAT_.max);
+		}
+		else if (strcmp(att_type->contents,"STRING")==0)
+		{
+			definitions[i]->att_type = STRING_;
+		}
+		else if (strcmp(att_type->contents,"ENUM")==0)
+		{
+			definitions[i]->att_type = ENUM_;
+			char **enum_list = allocate(sizeof(*enum_list)*attribute_type->children_num+1);
+			int count = 0;
+			for(int j = 0 ; j>=0;)
+			{
+				j = mpc_ast_get_index_lb(attribute_type, "string|>", j);
+				if(j >= 0)
+				{
+					mpc_ast_t *value = mpc_ast_get_child(attribute_type->children[j],"regex");
+					enum_list[count++]= duplicate(value->contents);
+					j++;
+				}
+			}
+
+			definitions[i]->value.ENUM_.ENUM_list = allocate(sizeof(char *));
+
+			definitions[i]->value.ENUM_.count = count;
+			definitions[i]->value.ENUM_.ENUM_list = enum_list;
+		}
+	}
+
+	mpc_ast_t *attribute_list = mpc_ast_get_child(ast, "attribute_values|>");
+	
+	attribute_value **attributes = allocate(sizeof(*attributes)*attribute_list->children_num);
+
+	for (int i = 0; i < attribute_list->children_num; i++)
+	{
+		attributes[i] = allocate(sizeof(attribute_value));
+		/*get name of attribute values */
+		mpc_ast_t *attribute_name = mpc_ast_get_child(attribute_list->children[i], "attribute_name|string|>");
+		mpc_ast_t *name = mpc_ast_get_child(attribute_name,"regex");
+		attributes[i]->name = duplicate(name->contents);
+		
+		int j = 0;
+		while(j<attribute_definitions->children_num)
+		{
+			if (strcmp(attributes[i]->name,definitions[j]->name)==0)
+			{
+				attributes[i]->definition = definitions[j];
+			}
+			j++;
+		}
+		
+		mpc_ast_t *obj_type = mpc_ast_get_child(attribute_list->children[i], "object_type|string");
+		if (obj_type==NULL)
+		{
+			attributes[i]->obj_type = ET_;
+		}
+		else if (strcmp(obj_type->contents,"BU_")==0)
+		{
+			attributes[i]->obj_type = BU_;
+			mpc_ast_t *node = mpc_ast_get_child(attribute_list->children[i], "node|ident|regex");
+			attributes[i]->obj_name.node_name = duplicate(node->contents);
+		}
+		else if (strcmp(obj_type->contents,"BO_")==0)
+		{
+			attributes[i]->obj_type = BO_;
+			mpc_ast_t *id = mpc_ast_get_child(attribute_list->children[i], "id|integer|regex");
+			sscanf(id->contents,  "%u", &attributes[i]->obj_name.message);
+		}
+		else if (strcmp(obj_type->contents,"SG_")==0)
+		{
+			attributes[i]->obj_type = SG_;
+			mpc_ast_t *id = mpc_ast_get_child(attribute_list->children[i], "id|integer|regex");
+			sscanf(id->contents,  "%u", &attributes[i]->obj_name.message);
+
+			mpc_ast_t *name = mpc_ast_get_child(attribute_list->children[i], "name|ident|regex");
+			attributes[i]->obj_name.signal.signal_name = duplicate(name->contents);
+		}
+		else
+		{
+			attributes[i]->obj_type = EV_;
+			mpc_ast_t *node = mpc_ast_get_child(attribute_list->children[i], "node|ident|regex");
+			attributes[i]->obj_name.node_name = duplicate(node->contents);
+		}
+
+		mpc_ast_t *value;
+
+		switch (attributes[i]->definition->att_type) /*   attribute_value = unsigned_integer | signed_integer | double | char_string ; attribute_value has't unsigned_integer*/
+		{
+			case INT_:	
+				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|integer|regex");
+				sscanf(value->contents,  "%d", &attributes[i]->value.signed_integer);
+				break;
+			
+			case HEX_:
+				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|integer|regex");
+				sscanf(value->contents,  "%x", &attributes[i]->value.signed_integer);   								/* i don't konw the context is HEX*/
+				break;
+
+			case FLOAT_:
+				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|float|regex");
+				sscanf(value->contents,  "%f", &attributes[i]->value.FLOAT);
+				break;
+
+			case STRING_:
+				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|string|>");
+				attributes[i]->value.char_string = duplicate(mpc_ast_get_child(value,"regex")->contents);
+				break;
+
+			case ENUM_:
+				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|integer|regex");
+				int indx;
+				sscanf(value->contents,  "%u", &indx);
+				attributes[i]->value.char_string = duplicate(attributes[i]->definition->value.ENUM_.ENUM_list[indx]);
+				break;
+
+		}
+
+
+	}
+
+	attribute_values *values = allocate(sizeof(attribute_values));
+
+	values->attribute_value_count = attribute_list->children_num;
+	values->attribute = attributes;
+
+	return values;
+}
+
+void assign_attribute_to_object(dbc_t *dbc)
+{
+	for(int i = 0 ; i < dbc->attribute->attribute_value_count ; i++)
+	{
+		switch (dbc->attribute->attribute[i]->obj_type)
+		{
+			case BU_:
+				break;
+
+			case BO_:
+				for(size_t j = 0 ; j < dbc->message_count ; j++)
+				{
+					if(dbc->attribute->attribute[i]->obj_name.message == dbc->messages[j]->id)
+					{
+						if(dbc->messages[j]->attribute->attribute_value_count == 0)
+						{
+							dbc->messages[j]->attribute->attribute = allocate(sizeof(attribute_value));
+						}
+						dbc->messages[j]->attribute->attribute = reallocator(dbc->messages[j]->attribute->attribute,sizeof(attribute_value)*++dbc->messages[j]->attribute->attribute_value_count);
+						dbc->messages[j]->attribute->attribute[dbc->messages[j]->attribute->attribute_value_count-1] = dbc->attribute->attribute[i];
+						break;
+					}
+				}
+				break;
+
+			case SG_:
+				for(size_t j = 0 ; j < dbc->message_count ; j++)
+				{
+					if(dbc->attribute->attribute[i]->obj_name.signal.id == dbc->messages[j]->id)
+					{
+						for(size_t k = 0 ; k < dbc->messages[j]->signal_count ; k++)
+						{
+							if(strcmp( dbc->attribute->attribute[i]->obj_name.signal.signal_name , dbc->messages[j]->sigs[k]->name)==0)
+							{
+								if(dbc->messages[j]->sigs[k]->attribute->attribute_value_count ==0 )
+								{
+									dbc->messages[j]->sigs[k]->attribute->attribute = allocate(sizeof(attribute_value));
+								}
+								dbc->messages[j]->sigs[k]->attribute->attribute = reallocator(dbc->messages[j]->sigs[k]->attribute->attribute , sizeof(attribute_value)*++dbc->messages[j]->sigs[k]->attribute->attribute_value_count);
+								dbc->messages[j]->sigs[k]->attribute->attribute[dbc->messages[j]->sigs[k]->attribute->attribute_value_count-1] = dbc->attribute->attribute[i];
+								break;
+							}
+						}
+					}
+				}
+				break;
+
+			case EV_:
+				break;
+
+			default:
+				break;			
+
 		}
 	}
 }
@@ -437,6 +683,11 @@ dbc_t *ast2dbc(mpc_ast_t *ast)
 			}
 		}
 	}
+
+	/* assign attribute to node env message signals*/
+
+	d->attribute = ast2attribute(ast);
+	assign_attribute_to_object(d);
 
 	return d;
 }
