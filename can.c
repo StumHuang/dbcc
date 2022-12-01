@@ -20,8 +20,12 @@ static void signal_delete(signal_t *signal)
 {
 	if (!signal)
 		return;
-	for(size_t i = 0; i < signal->ecu_count; i++)
+	for(unsigned int i = 0; i < signal->ecu_count; i++)
 		free(signal->ecus[i]);
+
+	for(int i = 0; i < signal->attribute->attribute_value_count; i++)
+		free(signal->attribute->attribute[i]);
+	
 	free(signal->name);
 	free(signal->ecus);
 	free(signal->units);
@@ -38,8 +42,11 @@ static void can_msg_delete(can_msg_t *msg)
 {
 	if (!msg)
 		return;
-	for(size_t i = 0; i < msg->signal_count; i++)
+	for(unsigned int i = 0; i < msg->signal_count; i++)
 		signal_delete(msg->sigs[i]);
+
+	for(int i = 0; i < msg->attribute->attribute_value_count; i++)
+		free(msg->attribute->attribute[i]);
 	free(msg->sigs);
 	free(msg->name);
 	free(msg->ecu);
@@ -385,7 +392,17 @@ attribute_values *ast2attribute(mpc_ast_t *ast)
 
 		/*get attribute value type of attribute_definition */
 		mpc_ast_t *attribute_type = mpc_ast_get_child(attribute_definitions->children[i], "attribute_value_type|>");
-		mpc_ast_t *att_type = mpc_ast_get_child(attribute_type,"string");
+
+		mpc_ast_t *att_type;
+		if (attribute_type==NULL)
+		{
+			att_type = mpc_ast_get_child(attribute_definitions->children[i],"attribute_value_type|string");
+		}
+		else
+		{
+			att_type = mpc_ast_get_child(attribute_type,"string");
+		}
+		
 
 		if (strcmp(att_type->contents,"INT")==0)
 		{
@@ -395,6 +412,7 @@ attribute_values *ast2attribute(mpc_ast_t *ast)
 			sscanf(value->contents,  "%d", &definitions[i]->value.INT_.min);
 
 			value = mpc_ast_get_child_lb(attribute_type,"integer|regex",++j);
+			
 			sscanf(value->contents,  "%d", &definitions[i]->value.INT_.max);
 
 		}
@@ -403,10 +421,10 @@ attribute_values *ast2attribute(mpc_ast_t *ast)
 			definitions[i]->att_type = HEX_;
 			int j = mpc_ast_get_index_lb(attribute_type, "integer|regex", 0);
 			mpc_ast_t *value = mpc_ast_get_child_lb(attribute_type,"integer|regex",j);
-			sscanf(value->contents,  "%x", &definitions[i]->value.HEX_.min);
+			sscanf(value->contents,  "%d", &definitions[i]->value.HEX_.min);
 
 			value = mpc_ast_get_child_lb(attribute_type,"integer|regex",++j);
-			sscanf(value->contents,  "%x", &definitions[i]->value.HEX_.max);
+			sscanf(value->contents,  "%d", &definitions[i]->value.HEX_.max);
 		}
 		else if (strcmp(att_type->contents,"FLOAT")==0)
 		{
@@ -505,13 +523,13 @@ attribute_values *ast2attribute(mpc_ast_t *ast)
 		switch (attributes[i]->definition->att_type) /*   attribute_value = unsigned_integer | signed_integer | double | char_string ; attribute_value has't unsigned_integer*/
 		{
 			case INT_:	
-				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|integer|regex");
+				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|float|regex");
 				sscanf(value->contents,  "%d", &attributes[i]->value.signed_integer);
 				break;
 			
 			case HEX_:
-				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|integer|regex");
-				sscanf(value->contents,  "%x", &attributes[i]->value.signed_integer);   								/* i don't konw the context is HEX*/
+				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|float|regex");
+				sscanf(value->contents,  "%d", &attributes[i]->value.signed_integer);   								/* i don't konw the context is HEX*/
 				break;
 
 			case FLOAT_:
@@ -525,7 +543,7 @@ attribute_values *ast2attribute(mpc_ast_t *ast)
 				break;
 
 			case ENUM_:
-				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|integer|regex");
+				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|float|regex");
 				int indx;
 				sscanf(value->contents,  "%u", &indx);
 				attributes[i]->value.char_string = duplicate(attributes[i]->definition->value.ENUM_.ENUM_list[indx]);

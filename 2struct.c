@@ -13,14 +13,121 @@
 #include "2json.h"
 #include "options.h"
 
-mxArray * msg2struct(can_msg_t *msg)
+mxArray *attribute2struct(attribute_values *attributes)
+{
+    const char *attributenames[] = {"Name","Value","Values","AttributeType"};
+	mwSize dims[2] = {1, attributes->attribute_value_count};
+	mxArray *attribute = mxCreateStructArray(2, dims, 4, attributenames);
+	
+	for(size_t i = 0 ; i < attributes->attribute_value_count ; i++)
+	{
+		char *attribute_name = attributes->attribute[i]->name;
+		int  attribute_type  = attributes->attribute[i]->definition->att_type;
+
+		mxSetField(attribute, i,"Name", mxCreateString(attribute_name));
+		
+		switch(attribute_type)
+		{
+			case INT_:
+				mxSetField(attribute, i,"AttributeType", mxCreateString("INT"));
+				mxSetField(attribute, i,"Value", mxCreateDoubleScalar(attributes->attribute[i]->value.signed_integer));
+
+				mwSize INTn[2] = {1,1};
+				const char *MaxMinINTName[] = {"Max","Min"};
+				mxArray *MaxMinINT = mxCreateStructArray(2, INTn, 2, MaxMinINTName);
+
+				mxSetField(MaxMinINT, 0,"Min", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.INT_.min));
+				mxSetField(MaxMinINT, 0,"Max", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.INT_.max));
+
+				mxSetField(attribute, 0,"Values", MaxMinINT);
+
+				break;
+
+			case HEX_:
+				mxSetField(attribute, i,"AttributeType", mxCreateString("HEX"));
+				mxSetField(attribute, i,"Value", mxCreateDoubleScalar(attributes->attribute[i]->value.signed_integer));
+
+				mwSize HEXn[2] = {1,1};
+				const char *MaxMinHEXName[] = {"Max","Min"};
+				mxArray *MaxMinHEX = mxCreateStructArray(2, HEXn, 2, MaxMinHEXName);
+
+				mxSetField(MaxMinHEX, 0,"Min", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.HEX_.min));
+				mxSetField(MaxMinHEX, 0,"Max", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.HEX_.max));
+
+				mxSetField(attribute, 0,"Values", MaxMinHEX);
+				break;
+
+			case FLOAT_:
+				mxSetField(attribute, i,"AttributeType", mxCreateString("FLOAT"));
+				mxSetField(attribute, i,"Value", mxCreateDoubleScalar(attributes->attribute[i]->value.FLOAT));
+
+				mwSize FLOATn[2] = {1,1};
+				const char *MaxMinFLOATName[] = {"Max","Min"};
+				mxArray *MaxMinFLOAT = mxCreateStructArray(2, FLOATn, 2, MaxMinFLOATName);
+
+				mxSetField(MaxMinFLOAT, 0,"Min", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.FLOAT_.min));
+				mxSetField(MaxMinFLOAT, 0,"Max", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.FLOAT_.max));
+
+				mxSetField(attribute, 0,"Values", MaxMinFLOAT);
+				break;
+
+			case STRING_:
+				mxSetField(attribute, i,"AttributeType", mxCreateString("STRING"));
+				mxSetField(attribute, i,"Values", mxCreateString(""));
+				mxSetField(attribute, i,"Value", mxCreateString(attributes->attribute[i]->value.char_string));
+				break;
+
+			case ENUM_:
+				mxSetField(attribute, i,"AttributeType", mxCreateString("ENUM"));
+				mxSetField(attribute, i,"Value", mxCreateString(attributes->attribute[i]->value.char_string));
+
+				mxArray *ENUM_list = mxCreateCellMatrix(1, attributes->attribute[i]->definition->value.ENUM_.count);
+				for(size_t j = 0 ; j < attributes->attribute[i]->definition->value.ENUM_.count ; j++)
+				{
+					mxSetCell(ENUM_list,j,mxCreateString(attributes->attribute[i]->definition->value.ENUM_.ENUM_list[j]));
+				}
+				mxSetField(attribute, i,"Values", ENUM_list);
+				
+				break;
+		}
+		
+	}
+	return attribute;
+}
+
+mxArray *val2struct(val_list_t *val_list)
+{
+	const char *valnames[] = {"Name","ID","Count","val_list_items"};
+	mwSize dims[2] = {1, 1};
+	mxArray *val = mxCreateStructArray(2, dims, 4, valnames);
+
+	mxSetField(val, 0,"Name", mxCreateString(val_list->name));
+	mxSetField(val, 0,"ID", mxCreateDoubleScalar(val_list->id));
+	mxSetField(val, 0,"Count", mxCreateDoubleScalar(val_list->val_list_item_count));
+
+	const char *itemnames[] = {"Name","Value"};
+	mwSize dims1[2] = {1, val_list->val_list_item_count};
+	mxArray *items = mxCreateStructArray(2, dims1, 2, itemnames);
+
+	for(size_t i = 0 ; i < val_list->val_list_item_count ; i++)
+	{
+		mxSetField(items, i,"Name", mxCreateString(val_list->val_list_items[i]->name));
+		mxSetField(items, i,"Value", mxCreateDoubleScalar(val_list->val_list_items[i]->value));
+	}
+
+	mxSetField(val, 0,"val_list_items", items);
+
+	return val;
+}
+
+mxArray *signal2struct(can_msg_t *msg)
 {
 	assert(msg);
 	signal_t *multiplexor = NULL;
 
-	const char *signalnames[] = {"Name","Start","Length","Endianess","Scaling","Offset","Minimum", "Maximum", "Signed", "Units", "Multiplexed","Floating","Comment","Receiving"};
+	const char *signalnames[] = {"Name","Start","Length","Endianess","Scaling","Offset","Minimum", "Maximum", "Signed", "Units", "Multiplexed","Floating","Comment","Receiving","Attribute","Val"};
 	mwSize dims[2] = {1, msg->signal_count};
-	mxArray *signals = mxCreateStructArray(2, dims, 14, signalnames);
+	mxArray *signals = mxCreateStructArray(2, dims, 16, signalnames);
 
 	for(size_t i = 0; i < msg->signal_count; i++) {
 		
@@ -67,27 +174,34 @@ mxArray * msg2struct(can_msg_t *msg)
 		mxSetField(signals, i,"Floating", mxCreateString(floating));
 		mxSetField(signals, i,"Comment", mxCreateString(sig->comment));
         
-        
-        const char *ReceiverNames[] = {"Receiver"};
-        mwSize dims[2] = {1, sig->ecu_count};
-        mxArray *Receivers = mxCreateStructArray(2, dims, 1, ReceiverNames);
-        
-        for (int k = 0;k<sig->ecu_count;k++)
-            mxSetField(Receivers, k,"Receiver", mxCreateString(sig->ecus[k]));
-        
-		mxSetField(signals, i,"Receiving", Receivers);
+        /* create Receive ECUs in Cell*/
 
+		mxArray *Receiver = mxCreateCellMatrix(1, sig->ecu_count);
+		for(size_t j = 0 ; j < sig->ecu_count ; j++)
+		{
+			mxSetCell(Receiver,j,mxCreateString(sig->ecus[j]));
+		}
+		mxSetField(signals, i,"Receiving", Receiver);
+		mxSetField(signals, i,"Attribute", attribute2struct(sig->attribute));
+
+		if(sig->val_list)
+		{
+			mxSetField(signals, i,"Val", val2struct(sig->val_list));
+		}
+		
+		
+		 
 	}
 	return signals;
 }
 
-mxArray * messages2struct(dbc_t *dbc)
+mxArray *messages2struct(dbc_t *dbc)
 {
 	assert(dbc);
 
 	mwSize dims[2] = {1, dbc->message_count};
-	const char *messagenames[] = {"Name","SendECU","ID","DLC","Signals","Comment"};
-	mxArray *messages = mxCreateStructArray(2, dims, 6, messagenames);
+	const char *messagenames[] = {"Name","SendECU","ID","DLC","Signals","Comment","Attribute"};
+	mxArray *messages = mxCreateStructArray(2, dims, 7, messagenames);
 
 	for (size_t i = 0; i < dbc->message_count; i++)
 	{
@@ -95,11 +209,14 @@ mxArray * messages2struct(dbc_t *dbc)
 		mxSetField(messages, i,"SendECU", mxCreateString(dbc->messages[i]->ecu));
 		mxSetField(messages, i,"ID", mxCreateDoubleScalar(dbc->messages[i]->id));
 		mxSetField(messages, i,"DLC", mxCreateDoubleScalar(dbc->messages[i]->dlc));
-		mxSetField(messages, i,"Signals", msg2struct(dbc->messages[i]));
+		mxSetField(messages, i,"Signals", signal2struct(dbc->messages[i]));
 		mxSetField(messages, i,"Comment", mxCreateString(dbc->messages[i]->comment));
+		mxSetField(messages, i,"Attribute", attribute2struct(dbc->messages[i]->attribute));
 	}
 	return messages;
 }
+
+
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs,const mxArray *prhs[])
 {

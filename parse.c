@@ -111,7 +111,7 @@ static const char *dbc_grammar =
 "                        ) ; \n"
 " attribute_definition : \"BA_DEF_\" <s>+ <object_type> <s>* <attribute_name> <s>+ <attribute_value_type> ';' <n> ; \n"
 " attribute_definitions: <attribute_definition>* ; \n"
-" attribute_value      : (<integer> | <float> | <string>); \n"
+" attribute_value      : (<float> | <integer> | <string>); \n"
 " attribute_default    : \"BA_DEF_DEF_\" <s>+ <attribute_name> <s>+ <attribute_value>';' <n>; \n"
 " attribute_value_for_object     : \"BA_\" <s>+ <attribute_name> <s>+ (<object_type> <s>+ (<node>|<id> <s>+ <name>|<id>|<env_var_name>) <s>+ )? <attribute_value> <s>* ';' <n> ; \n"
 " attribute_values     : <attribute_value_for_object>* ; \n"
