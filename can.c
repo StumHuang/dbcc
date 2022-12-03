@@ -23,8 +23,8 @@ static void signal_delete(signal_t *signal)
 	for(unsigned int i = 0; i < signal->ecu_count; i++)
 		free(signal->ecus[i]);
 
-	for(int i = 0; i < signal->attribute->attribute_value_count; i++)
-		free(signal->attribute->attribute[i]);
+	for(int i = 0; i < signal->attributes->attribute_value_count; i++)
+		free(signal->attributes->attribute[i]);
 	
 	free(signal->name);
 	free(signal->ecus);
@@ -45,8 +45,8 @@ static void can_msg_delete(can_msg_t *msg)
 	for(unsigned int i = 0; i < msg->signal_count; i++)
 		signal_delete(msg->sigs[i]);
 
-	for(int i = 0; i < msg->attribute->attribute_value_count; i++)
-		free(msg->attribute->attribute[i]);
+	for(int i = 0; i < msg->attributes->attribute_value_count; i++)
+		free(msg->attributes->attribute[i]);
 	free(msg->sigs);
 	free(msg->name);
 	free(msg->ecu);
@@ -162,7 +162,7 @@ static signal_t *ast2signal(mpc_ast_t *top, mpc_ast_t *ast, unsigned can_id)
 	mpc_ast_t *sign   = mpc_ast_get_child(ast, "sign|char");
 	sig->name = duplicate(name->contents);
 	sig->val_list = NULL;
-	sig->attribute    = allocate(sizeof(attribute_values));
+	sig->attributes    = allocate(sizeof(attribute_values));
 	r = sscanf(start->contents, "%u", &sig->start_bit);
 	/* BUG: Minor bug, an error should be returned here instead */
 	assert(r == 1 && sig->start_bit <= 64);
@@ -317,7 +317,7 @@ static can_msg_t *ast2msg(mpc_ast_t *top, mpc_ast_t *ast, dbc_t *dbc)
 		} while (bFlip);
 	}
 
-	c->attribute = allocate(sizeof(attribute_values));
+	c->attributes = allocate(sizeof(attribute_values));
 
 	debug("%s id:%u dlc:%u signals:%zu ecu:%s", c->name, c->id, c->dlc, c->signal_count, c->ecu);
 	return c;
@@ -365,25 +365,224 @@ void assign_comment_to_message(dbc_t *dbc, const char *comment, unsigned message
 	}
 }
 
-
-attribute_values *ast2attribute(mpc_ast_t *ast)
+void SetAttributeDefaultValue(attribute_value *attribute)
 {
-	
-	 
-	mpc_ast_t *attribute_definitions = mpc_ast_get_child(ast, "attribute_definitions|>");
+	mpc_ast_t *value;
+	switch (attribute->definition->att_type) /*   attribute_value = unsigned_integer | signed_integer | double | char_string ; attribute_value has't unsigned_integer*/
+		{
+			case INT_:	
+				attribute->value.signed_integer = attribute->definition->inivalue.signed_integer;
+				break;
+			
+			case HEX_:
+				attribute->value.signed_integer = attribute->definition->inivalue.signed_integer;   								/* i don't konw the context is HEX*/
+				break;
 
-	attribute_definition **definitions = allocate(sizeof(attribute_definition)*attribute_definitions->children_num);
-	for(int i = 0;i<attribute_definitions->children_num;i++)
+			case FLOAT_:
+				attribute->value.FLOAT = attribute->definition->inivalue.FLOAT;
+				break;
+
+			case STRING_:
+				if (attribute->definition->inivalue.char_string ==NULL) {attribute->definition->inivalue.char_string = "";}
+				attribute->value.char_string = duplicate(attribute->definition->inivalue.char_string);
+				break;
+
+			case ENUM_:
+				
+				attribute->value.char_string = duplicate(attribute->definition->value.ENUM_.ENUM_list[attribute->definition->inivalue.unsigned_integer]);
+				break;
+
+		}
+
+}
+
+void assign_attribute_to_object(dbc_t *dbc,attribute_definitions *definitions)
+{
+	for(int i = 0 ; i < definitions->attribute_definition_count ; i++)
+	{
+		switch (definitions->attributes[i]->obj_type)
+		{
+			case BU_:
+				break;
+
+			case BO_:
+				for(size_t j = 0 ; j < dbc->message_count ; j++)
+				{
+					if(dbc->messages[j]->attributes->attribute_value_count == 0)
+					{
+						dbc->messages[j]->attributes->attribute = allocate(sizeof(attribute_value));
+					}
+					dbc->messages[j]->attributes->attribute = reallocator(dbc->messages[j]->attributes->attribute,sizeof(attribute_value)*++dbc->messages[j]->attributes->attribute_value_count);
+					dbc->messages[j]->attributes->attribute[dbc->messages[j]->attributes->attribute_value_count-1] = allocate(sizeof(attribute_definition));
+					dbc->messages[j]->attributes->attribute[dbc->messages[j]->attributes->attribute_value_count-1]->definition = definitions->attributes[i];
+					SetAttributeDefaultValue(dbc->messages[j]->attributes->attribute[dbc->messages[j]->attributes->attribute_value_count-1]);
+				}
+				break;
+
+			case SG_:
+				for(size_t j = 0 ; j < dbc->message_count ; j++)
+				{
+					for(size_t k = 0 ; k < dbc->messages[j]->signal_count ; k++)
+					{
+						if(dbc->messages[j]->sigs[k]->attributes->attribute_value_count ==0 )
+						{
+							dbc->messages[j]->sigs[k]->attributes->attribute = allocate(sizeof(attribute_value));
+						}
+						dbc->messages[j]->sigs[k]->attributes->attribute = reallocator(dbc->messages[j]->sigs[k]->attributes->attribute , sizeof(attribute_value)*++dbc->messages[j]->sigs[k]->attributes->attribute_value_count);
+						dbc->messages[j]->sigs[k]->attributes->attribute[dbc->messages[j]->sigs[k]->attributes->attribute_value_count-1] = allocate(sizeof(attribute_definition));
+						dbc->messages[j]->sigs[k]->attributes->attribute[dbc->messages[j]->sigs[k]->attributes->attribute_value_count-1]->definition = definitions->attributes[i];
+						SetAttributeDefaultValue(dbc->messages[j]->sigs[k]->attributes->attribute[dbc->messages[j]->sigs[k]->attributes->attribute_value_count-1]);
+					}
+				}
+				break;
+
+			case EV_:
+				break;
+
+			default:
+				break;			
+		}
+	}
+}
+
+void SetAttributeInit(mpc_ast_t *ast,attribute_value *attribute)
+{
+	mpc_ast_t *value;
+	switch (attribute->definition->att_type) /*   attribute_value = unsigned_integer | signed_integer | double | char_string ; attribute_value has't unsigned_integer*/
+		{
+			case INT_:	
+				value = mpc_ast_get_child(ast, "attribute_value|float|regex");
+				sscanf(value->contents, "%d",&attribute->value.signed_integer);
+				break;
+			
+			case HEX_:
+				value = mpc_ast_get_child(ast, "attribute_value|float|regex");
+				sscanf(value->contents,  "%d", &attribute->value.signed_integer);   								/* i don't konw the context is HEX*/
+				break;
+
+			case FLOAT_:
+				value = mpc_ast_get_child(ast, "attribute_value|float|regex");
+				sscanf(value->contents,  "%f", &attribute->value.FLOAT);
+				break;
+
+			case STRING_:
+				value = mpc_ast_get_child(ast, "attribute_value|string|>");
+				attribute->value.char_string = duplicate(mpc_ast_get_child(value,"regex")->contents);
+				break;
+
+			case ENUM_:
+				value = mpc_ast_get_child(ast, "attribute_value|float|regex");
+				int indx;
+				sscanf(value->contents,  "%u", &indx);
+				attribute->value.char_string = duplicate(attribute->definition->value.ENUM_.ENUM_list[indx]);
+				break;
+
+		}
+
+}
+
+void assign_init_attribute(mpc_ast_t *ast,dbc_t *dbc)
+{
+	mpc_ast_t *attribute_list = mpc_ast_get_child(ast, "attribute_values|>");
+	for(int i = 0; i<attribute_list->children_num;i++)
+	{
+		/*get name of attribute values */
+		mpc_ast_t *attribute_name = mpc_ast_get_child(attribute_list->children[i], "attribute_name|string|>");
+		mpc_ast_t *name = mpc_ast_get_child(attribute_name,"regex");
+		mpc_ast_t *obj_type = mpc_ast_get_child(attribute_list->children[i], "object_type|string");
+
+		object_type OBJ_Type;
+		if (obj_type==NULL)
+		{
+			OBJ_Type = ET_;
+		}
+		else if (strcmp(obj_type->contents,"BU_")==0)
+		{
+			OBJ_Type = BU_;
+			mpc_ast_t *node = mpc_ast_get_child(attribute_list->children[i], "node|ident|regex");
+			char *node_name = duplicate(node->contents);
+		}
+		else if (strcmp(obj_type->contents,"BO_")==0)
+		{
+			OBJ_Type = BO_;
+			mpc_ast_t *id = mpc_ast_get_child(attribute_list->children[i], "id|integer|regex");
+			unsigned long message;
+			sscanf(id->contents,  "%lu", &message);
+			char *att_name = duplicate(name->contents);
+			for(size_t j = 0;j<dbc->message_count;j++)
+			{
+				if(message == dbc->messages[j]->id)
+				{
+					for(int k = 0;k<dbc->messages[j]->attributes->attribute_value_count;k++)
+					{
+						if(strcmp(att_name,dbc->messages[j]->attributes->attribute[k]->definition->name)==0)
+						{
+							SetAttributeInit(attribute_list->children[i],dbc->messages[j]->attributes->attribute[k]);
+							break;
+						}
+					}
+				}
+			}
+		}
+		else if (strcmp(obj_type->contents,"SG_")==0)
+		{
+			OBJ_Type = SG_;
+			mpc_ast_t *id = mpc_ast_get_child(attribute_list->children[i], "id|integer|regex");
+			unsigned long message;
+			sscanf(id->contents,  "%lu", &message);
+
+			mpc_ast_t *signalnames = mpc_ast_get_child(attribute_list->children[i], "name|ident|regex");
+			char *signal_name = duplicate(signalnames->contents);
+			char *att_name = duplicate(name->contents);
+
+			for(size_t j = 0;j<dbc->message_count;j++)
+			{
+				if(message == dbc->messages[j]->id)
+				{
+					for(size_t k = 0;k<dbc->messages[j]->signal_count;k++)
+					{
+						if(strcmp(signal_name,dbc->messages[j]->sigs[k]->name)==0)
+						{
+							for(int l =0;l<dbc->messages[j]->sigs[k]->attributes->attribute_value_count;l++)
+							{
+								if(strcmp(att_name,dbc->messages[j]->sigs[k]->attributes->attribute[l]->definition->name)==0)
+								{
+									SetAttributeInit(attribute_list->children[i],dbc->messages[j]->sigs[k]->attributes->attribute[l]);
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+
+		}
+		else
+		{
+			OBJ_Type = EV_;
+			mpc_ast_t *node = mpc_ast_get_child(attribute_list->children[i], "node|ident|regex");
+			char *node_name = duplicate(node->contents);
+		}
+
+	}
+}
+
+void ast2attributedefinitions(mpc_ast_t *ast,dbc_t *dbc)
+{
+	mpc_ast_t *attributes = mpc_ast_get_child(ast, "attribute_definitions|>");
+
+	attribute_definition **definitions = allocate(sizeof(attribute_definition)*attributes->children_num);
+	for(int i = 0;i<attributes->children_num;i++)
 	{
 		definitions[i] = allocate(sizeof(attribute_definition));
 
         /*get name of attribute_definition */
-		mpc_ast_t *attribute_name = mpc_ast_get_child(attribute_definitions->children[i], "attribute_name|string|>");
+		mpc_ast_t *attribute_name = mpc_ast_get_child(attributes->children[i], "attribute_name|string|>");
 		mpc_ast_t *name = mpc_ast_get_child(attribute_name,"regex");
 		definitions[i]->name = duplicate(name->contents);
 
 		/*get object_type of attribute_definition */
-		mpc_ast_t *obj_type = mpc_ast_get_child(attribute_definitions->children[i], "object_type|string");
+		mpc_ast_t *obj_type = mpc_ast_get_child(attributes->children[i], "object_type|string");
 		if (obj_type==NULL)							    	{definitions[i]->obj_type = ET_;}
 		else if (strcmp(obj_type->contents,"BU_")==0) 		{definitions[i]->obj_type = BU_;}
 		else if (strcmp(obj_type->contents,"BO_")==0) 	    {definitions[i]->obj_type = BO_;}
@@ -391,12 +590,12 @@ attribute_values *ast2attribute(mpc_ast_t *ast)
 		else     	                                    	{definitions[i]->obj_type = EV_;}                                       
 
 		/*get attribute value type of attribute_definition */
-		mpc_ast_t *attribute_type = mpc_ast_get_child(attribute_definitions->children[i], "attribute_value_type|>");
+		mpc_ast_t *attribute_type = mpc_ast_get_child(attributes->children[i], "attribute_value_type|>");
 
 		mpc_ast_t *att_type;
 		if (attribute_type==NULL)
 		{
-			att_type = mpc_ast_get_child(attribute_definitions->children[i],"attribute_value_type|string");
+			att_type = mpc_ast_get_child(attributes->children[i],"attribute_value_type|string");
 		}
 		else
 		{
@@ -462,162 +661,69 @@ attribute_values *ast2attribute(mpc_ast_t *ast)
 			definitions[i]->value.ENUM_.ENUM_list = enum_list;
 		}
 	}
+	attribute_definitions *r = allocate(sizeof(r));
+	r->attribute_definition_count = attributes->children_num;
+	r->attributes = definitions;
 
-	mpc_ast_t *attribute_list = mpc_ast_get_child(ast, "attribute_values|>");
-	
-	attribute_value **attributes = allocate(sizeof(*attributes)*attribute_list->children_num);
+	/*set attribute definition ini value*/
+	mpc_ast_t *attribute_defaults = mpc_ast_get_child(ast, "attribute_defaults|>");
 
-	for (int i = 0; i < attribute_list->children_num; i++)
+	if(attribute_defaults>0)
 	{
-		attributes[i] = allocate(sizeof(attribute_value));
-		/*get name of attribute values */
-		mpc_ast_t *attribute_name = mpc_ast_get_child(attribute_list->children[i], "attribute_name|string|>");
-		mpc_ast_t *name = mpc_ast_get_child(attribute_name,"regex");
-		attributes[i]->name = duplicate(name->contents);
-		
-		int j = 0;
-		while(j<attribute_definitions->children_num)
+		for(int i = 0; i< attribute_defaults->children_num;i++)
 		{
-			if (strcmp(attributes[i]->name,definitions[j]->name)==0)
+			mpc_ast_t *attribute_name = mpc_ast_get_child(attribute_defaults->children[i], "attribute_name|string|>");
+			mpc_ast_t *name = mpc_ast_get_child(attribute_name,"regex");
+
+			for(int j = 0; j<r->attribute_definition_count;j++)
 			{
-				attributes[i]->definition = definitions[j];
-			}
-			j++;
-		}
-		
-		mpc_ast_t *obj_type = mpc_ast_get_child(attribute_list->children[i], "object_type|string");
-		if (obj_type==NULL)
-		{
-			attributes[i]->obj_type = ET_;
-		}
-		else if (strcmp(obj_type->contents,"BU_")==0)
-		{
-			attributes[i]->obj_type = BU_;
-			mpc_ast_t *node = mpc_ast_get_child(attribute_list->children[i], "node|ident|regex");
-			attributes[i]->obj_name.node_name = duplicate(node->contents);
-		}
-		else if (strcmp(obj_type->contents,"BO_")==0)
-		{
-			attributes[i]->obj_type = BO_;
-			mpc_ast_t *id = mpc_ast_get_child(attribute_list->children[i], "id|integer|regex");
-			sscanf(id->contents,  "%u", &attributes[i]->obj_name.message);
-		}
-		else if (strcmp(obj_type->contents,"SG_")==0)
-		{
-			attributes[i]->obj_type = SG_;
-			mpc_ast_t *id = mpc_ast_get_child(attribute_list->children[i], "id|integer|regex");
-			sscanf(id->contents,  "%u", &attributes[i]->obj_name.message);
-
-			mpc_ast_t *name = mpc_ast_get_child(attribute_list->children[i], "name|ident|regex");
-			attributes[i]->obj_name.signal.signal_name = duplicate(name->contents);
-		}
-		else
-		{
-			attributes[i]->obj_type = EV_;
-			mpc_ast_t *node = mpc_ast_get_child(attribute_list->children[i], "node|ident|regex");
-			attributes[i]->obj_name.node_name = duplicate(node->contents);
-		}
-
-		mpc_ast_t *value;
-
-		switch (attributes[i]->definition->att_type) /*   attribute_value = unsigned_integer | signed_integer | double | char_string ; attribute_value has't unsigned_integer*/
-		{
-			case INT_:	
-				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|float|regex");
-				sscanf(value->contents,  "%d", &attributes[i]->value.signed_integer);
-				break;
-			
-			case HEX_:
-				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|float|regex");
-				sscanf(value->contents,  "%d", &attributes[i]->value.signed_integer);   								/* i don't konw the context is HEX*/
-				break;
-
-			case FLOAT_:
-				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|float|regex");
-				sscanf(value->contents,  "%f", &attributes[i]->value.FLOAT);
-				break;
-
-			case STRING_:
-				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|string|>");
-				attributes[i]->value.char_string = duplicate(mpc_ast_get_child(value,"regex")->contents);
-				break;
-
-			case ENUM_:
-				value = mpc_ast_get_child(attribute_list->children[i], "attribute_value|float|regex");
-				int indx;
-				sscanf(value->contents,  "%u", &indx);
-				attributes[i]->value.char_string = duplicate(attributes[i]->definition->value.ENUM_.ENUM_list[indx]);
-				break;
-
-		}
-
-
-	}
-
-	attribute_values *values = allocate(sizeof(attribute_values));
-
-	values->attribute_value_count = attribute_list->children_num;
-	values->attribute = attributes;
-
-	return values;
-}
-
-void assign_attribute_to_object(dbc_t *dbc)
-{
-	for(int i = 0 ; i < dbc->attribute->attribute_value_count ; i++)
-	{
-		switch (dbc->attribute->attribute[i]->obj_type)
-		{
-			case BU_:
-				break;
-
-			case BO_:
-				for(size_t j = 0 ; j < dbc->message_count ; j++)
+				if(strcmp(name->contents,r->attributes[j]->name)==0)
 				{
-					if(dbc->attribute->attribute[i]->obj_name.message == dbc->messages[j]->id)
+					switch(r->attributes[j]->att_type)
 					{
-						if(dbc->messages[j]->attribute->attribute_value_count == 0)
-						{
-							dbc->messages[j]->attribute->attribute = allocate(sizeof(attribute_value));
-						}
-						dbc->messages[j]->attribute->attribute = reallocator(dbc->messages[j]->attribute->attribute,sizeof(attribute_value)*++dbc->messages[j]->attribute->attribute_value_count);
-						dbc->messages[j]->attribute->attribute[dbc->messages[j]->attribute->attribute_value_count-1] = dbc->attribute->attribute[i];
-						break;
-					}
-				}
-				break;
+						case INT_:
+							name = mpc_ast_get_child(attribute_defaults->children[i],"attribute_value|float|regex");
+							sscanf(name->contents,  "%d", &r->attributes[j]->inivalue.signed_integer);
+							break;
 
-			case SG_:
-				for(size_t j = 0 ; j < dbc->message_count ; j++)
-				{
-					if(dbc->attribute->attribute[i]->obj_name.signal.id == dbc->messages[j]->id)
-					{
-						for(size_t k = 0 ; k < dbc->messages[j]->signal_count ; k++)
-						{
-							if(strcmp( dbc->attribute->attribute[i]->obj_name.signal.signal_name , dbc->messages[j]->sigs[k]->name)==0)
+						case HEX_:
+							name = mpc_ast_get_child(attribute_defaults->children[i],"attribute_value|float|regex");
+							sscanf(name->contents,  "%x", &r->attributes[j]->inivalue.signed_integer);
+							break;
+
+						case FLOAT_:
+							name = mpc_ast_get_child(attribute_defaults->children[i],"attribute_value|float|regex");
+							sscanf(name->contents,  "%f", &r->attributes[j]->inivalue.FLOAT);
+							break;
+
+						case STRING_:
+							attribute_name = mpc_ast_get_child(attribute_defaults->children[i],"attribute_value|string|>");
+							if(attribute_name)
 							{
-								if(dbc->messages[j]->sigs[k]->attribute->attribute_value_count ==0 )
-								{
-									dbc->messages[j]->sigs[k]->attribute->attribute = allocate(sizeof(attribute_value));
-								}
-								dbc->messages[j]->sigs[k]->attribute->attribute = reallocator(dbc->messages[j]->sigs[k]->attribute->attribute , sizeof(attribute_value)*++dbc->messages[j]->sigs[k]->attribute->attribute_value_count);
-								dbc->messages[j]->sigs[k]->attribute->attribute[dbc->messages[j]->sigs[k]->attribute->attribute_value_count-1] = dbc->attribute->attribute[i];
-								break;
+								name = mpc_ast_get_child(attribute_name,"regex");
+								r->attributes[j]->inivalue.char_string = duplicate(name->contents);
 							}
-						}
+							break;	
+
+						case ENUM_:
+							attribute_name = mpc_ast_get_child(attribute_defaults->children[i],"attribute_value|string|>");
+							if(attribute_name)
+							{
+								name = mpc_ast_get_child(attribute_name,"regex");
+								sscanf(name->contents,  "%u", &r->attributes[j]->inivalue.unsigned_integer);
+							}
+							break;
 					}
+					break;
 				}
-				break;
-
-			case EV_:
-				break;
-
-			default:
-				break;			
-
+			}
 		}
 	}
+
+	assign_attribute_to_object(dbc,r);
+
 }
+
 
 dbc_t *ast2dbc(mpc_ast_t *ast)
 {
@@ -703,9 +809,9 @@ dbc_t *ast2dbc(mpc_ast_t *ast)
 	}
 
 	/* assign attribute to node env message signals*/
+	ast2attributedefinitions(ast,d);
 
-	d->attribute = ast2attribute(ast);
-	assign_attribute_to_object(d);
+	assign_init_attribute(ast,d);
 
 	return d;
 }

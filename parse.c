@@ -50,6 +50,7 @@ static mpc_ast_t *_parse_dbc_file_by_handle(const char *name, FILE *handle);
 	X(attribute_definition, 			"attribute_definition")\
 	X(attribute_definitions, 			"attribute_definitions")\
 	X(attribute_default,    			"attribute_default")\
+	X(attribute_defaults,    			"attribute_defaults")\
 	X(attribute_value,      			"attribute_value")\
 	X(attribute_value_for_object,     	"attribute_value_for_object")\
 	X(attribute_values,     			"attribute_values")\
@@ -113,6 +114,7 @@ static const char *dbc_grammar =
 " attribute_definitions: <attribute_definition>* ; \n"
 " attribute_value      : (<float> | <integer> | <string>); \n"
 " attribute_default    : \"BA_DEF_DEF_\" <s>+ <attribute_name> <s>+ <attribute_value>';' <n>; \n"
+" attribute_defaults   : <attribute_default>* ; \n"
 " attribute_value_for_object     : \"BA_\" <s>+ <attribute_name> <s>+ (<object_type> <s>+ (<node>|<id> <s>+ <name>|<id>|<env_var_name>) <s>+ )? <attribute_value> <s>* ';' <n> ; \n"
 " attribute_values     : <attribute_value_for_object>* ; \n"
 " val_item             : (<integer> <s>+ <string> <s>+) ; \n"
@@ -153,7 +155,7 @@ static const char *dbc_grammar =
 	signal_groups
 	signal_extended_value_type_list
 	extended_multiplexing ;*/
-" dbc       : <version> <symbols> <bs> <ecus> <values>* <n>* <messages> <message_sender>* <sigval>* <comments>  <attribute_definitions> <attribute_default>* <attribute_values> <vals>; \n" ;
+" dbc       : <version> <symbols> <bs> <ecus> <values>* <n>* <messages> <message_sender>* <sigval>* <comments>  <attribute_definitions> <attribute_defaults> <attribute_values> <vals>; \n" ;
 
 const char *parse_get_grammar(void)
 {

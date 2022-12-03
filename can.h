@@ -60,30 +60,32 @@ typedef struct{
 			float max;
 		}FLOAT_;
 		
-		char STRING;
+		char *STRING;
 		struct
 		{
 			int count;
 			char **ENUM_list;
 		}ENUM_;
 	}value;
-}attribute_definition;
 
-typedef struct {
-	char *name;
-	object_type obj_type;
 	union
 	{
-		char *node_name;
-		unsigned int message;
-		struct 
-		{
-			unsigned int   id;
-			char           *signal_name;
-		}signal;
-		char *env_name;
-	}obj_name;
+		unsigned int unsigned_integer;
+		int          signed_integer;
+		float 		 FLOAT;
+		char         *char_string;
+	}inivalue;
+}attribute_definition;
 
+typedef struct 
+{
+	int attribute_definition_count;
+	attribute_definition **attributes;
+
+}attribute_definitions;
+
+
+typedef struct {
 	union
 	{
 		unsigned int unsigned_integer;
@@ -131,7 +133,7 @@ typedef struct {
 	bool is_multiplexor; /**< true if this is a multiplexor */
 	bool is_multiplexed; /**< true if this is a multiplexed signal */
 	unsigned switchval;  /**< if is_multiplexed, this will contain the value that decodes this signal for the multiplexor */
-	attribute_values * attribute;
+	attribute_values * attributes;
 	val_list_t *val_list;
 	char *comment;
 } signal_t;
@@ -144,7 +146,7 @@ typedef struct {
 	size_t signal_count; /**< number of signals */
 	unsigned dlc;        /**< length of CAN message 0-8 bytes */
 	unsigned long id;    /**< identifier, 11 or 29 bit */
-	attribute_values * attribute;
+	attribute_values * attributes;
 	char *comment;
 } can_msg_t;
 
@@ -154,7 +156,7 @@ typedef struct {
 	can_msg_t **messages; /**< list of messages */
 	size_t val_count;     /**< count of vals */
 	val_list_t **vals;    /**< value list; used for enumerations in DBC file */
-	attribute_values * attribute;
+	attribute_values * attributes;
 } dbc_t;
 
 dbc_t *ast2dbc(mpc_ast_t *ast);
