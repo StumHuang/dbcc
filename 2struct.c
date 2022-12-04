@@ -21,7 +21,7 @@ mxArray *attribute2struct(attribute_values *attributes)
 	
 	for(size_t i = 0 ; i < attributes->attribute_value_count ; i++)
 	{
-		char *attribute_name = attributes->attribute[i]->name;
+		char *attribute_name = attributes->attribute[i]->definition->name;
 		int  attribute_type  = attributes->attribute[i]->definition->att_type;
 
 		mxSetField(attribute, i,"Name", mxCreateString(attribute_name));
@@ -39,7 +39,7 @@ mxArray *attribute2struct(attribute_values *attributes)
 				mxSetField(MaxMinINT, 0,"Min", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.INT_.min));
 				mxSetField(MaxMinINT, 0,"Max", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.INT_.max));
 
-				mxSetField(attribute, 0,"Values", MaxMinINT);
+				mxSetField(attribute, i,"Values", MaxMinINT);
 
 				break;
 
@@ -54,7 +54,7 @@ mxArray *attribute2struct(attribute_values *attributes)
 				mxSetField(MaxMinHEX, 0,"Min", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.HEX_.min));
 				mxSetField(MaxMinHEX, 0,"Max", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.HEX_.max));
 
-				mxSetField(attribute, 0,"Values", MaxMinHEX);
+				mxSetField(attribute, i,"Values", MaxMinHEX);
 				break;
 
 			case FLOAT_:
@@ -68,12 +68,12 @@ mxArray *attribute2struct(attribute_values *attributes)
 				mxSetField(MaxMinFLOAT, 0,"Min", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.FLOAT_.min));
 				mxSetField(MaxMinFLOAT, 0,"Max", mxCreateDoubleScalar(attributes->attribute[i]->definition->value.FLOAT_.max));
 
-				mxSetField(attribute, 0,"Values", MaxMinFLOAT);
+				mxSetField(attribute, i,"Values", MaxMinFLOAT);
 				break;
 
 			case STRING_:
 				mxSetField(attribute, i,"AttributeType", mxCreateString("STRING"));
-				mxSetField(attribute, i,"Values", mxCreateString(""));
+				mxSetField(attribute, i,"Values", mxCreateString(attributes->attribute[i]->definition->value.STRING));
 				mxSetField(attribute, i,"Value", mxCreateString(attributes->attribute[i]->value.char_string));
 				break;
 
@@ -87,7 +87,6 @@ mxArray *attribute2struct(attribute_values *attributes)
 					mxSetCell(ENUM_list,j,mxCreateString(attributes->attribute[i]->definition->value.ENUM_.ENUM_list[j]));
 				}
 				mxSetField(attribute, i,"Values", ENUM_list);
-				
 				break;
 		}
 		
@@ -182,7 +181,7 @@ mxArray *signal2struct(can_msg_t *msg)
 			mxSetCell(Receiver,j,mxCreateString(sig->ecus[j]));
 		}
 		mxSetField(signals, i,"Receiving", Receiver);
-		mxSetField(signals, i,"Attribute", attribute2struct(sig->attribute));
+		mxSetField(signals, i,"Attribute", attribute2struct(sig->attributes));
 
 		if(sig->val_list)
 		{
@@ -211,7 +210,7 @@ mxArray *messages2struct(dbc_t *dbc)
 		mxSetField(messages, i,"DLC", mxCreateDoubleScalar(dbc->messages[i]->dlc));
 		mxSetField(messages, i,"Signals", signal2struct(dbc->messages[i]));
 		mxSetField(messages, i,"Comment", mxCreateString(dbc->messages[i]->comment));
-		mxSetField(messages, i,"Attribute", attribute2struct(dbc->messages[i]->attribute));
+		mxSetField(messages, i,"Attribute", attribute2struct(dbc->messages[i]->attributes));
 	}
 	return messages;
 }

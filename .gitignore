@@ -10,7 +10,7 @@ vgcore.*
 *.htm
 ex*
 *.1
-*.pdf
+#*.pdf
 *.html
 *.xhtml
 *.exe

@@ -571,6 +571,8 @@ void ast2attributedefinitions(mpc_ast_t *ast,dbc_t *dbc)
 {
 	mpc_ast_t *attributes = mpc_ast_get_child(ast, "attribute_definitions|>");
 
+	if(attributes==NULL) {return;}
+
 	attribute_definition **definitions = allocate(sizeof(attribute_definition)*attributes->children_num);
 	for(int i = 0;i<attributes->children_num;i++)
 	{
@@ -721,6 +723,7 @@ void ast2attributedefinitions(mpc_ast_t *ast,dbc_t *dbc)
 	}
 
 	assign_attribute_to_object(dbc,r);
+	assign_init_attribute(ast,dbc);
 
 }
 
@@ -810,8 +813,6 @@ dbc_t *ast2dbc(mpc_ast_t *ast)
 
 	/* assign attribute to node env message signals*/
 	ast2attributedefinitions(ast,d);
-
-	assign_init_attribute(ast,d);
 
 	return d;
 }
